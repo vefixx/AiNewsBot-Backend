@@ -3,6 +3,8 @@ using System.ClientModel.Primitives;
 using AiNewsBot_Backend.API.Models;
 using AiNewsBot_Backend.Core.Helpers;
 using AiNewsBot_Backend.Core.Models;
+using Hangfire;
+using Hangfire.MemoryStorage;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
@@ -28,6 +30,11 @@ public class Program
             logging.RequestBodyLogLimit = 256;
             logging.ResponseBodyLogLimit = 256;
         });
+        
+        builder.Services.AddHangfire(config =>
+        {
+            config.UseMemoryStorage();
+        });
 
         builder.Services.AddMvc()
             .ConfigureApiBehaviorOptions(opt
@@ -48,9 +55,9 @@ public class Program
         AiChatClientSettings aiChatClientSettings =
             JsonHelper.ReadJson<AiChatClientSettings>("AIChatClientSettings.json");
 
-        builder.Services.AddSingleton<TelegramBotClient>(botClient);
-        builder.Services.AddSingleton<OpenRouterClient>(openAiChatClient);
-        builder.Services.AddSingleton<AiChatClientSettings>(aiChatClientSettings);
+        builder.Services.AddSingleton(botClient);
+        builder.Services.AddSingleton(openAiChatClient);
+        builder.Services.AddSingleton(aiChatClientSettings);
         builder.Services.AddControllers();
 
         var app = builder.Build();
@@ -59,6 +66,8 @@ public class Program
         app.UseHttpsRedirection();
         app.UseAuthorization();
         app.MapControllers();
+        app.MapHangfireDashboard();
+        app.UseHangfireServer();
 
         app.Run();
     }

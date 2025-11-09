@@ -1,35 +1,73 @@
 ﻿using System.ClientModel;
+using System.Net.WebSockets;
+using System.Runtime.CompilerServices;
 using AiNewsBot_Backend.API.Models;
 using AiNewsBot_Backend.Core.Helpers;
 using AiNewsBot_Backend.Core.Models;
+using Hangfire;
+using Hangfire.Storage;
+using Hangfire.Storage.Monitoring;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using OpenAI.Chat;
 using OpenRouter.NET;
 using OpenRouter.NET.Models;
 
 namespace AiNewsBot_Backend.API.Controllers;
 
-
 [ApiController]
 [Route("ai-gateway")]
 public class AiGatewayController : ControllerBase
 {
     private readonly OpenRouterClient _aiChatClient;
+    private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ILogger<AiGatewayController> _logger;
-    
-    public AiGatewayController(OpenRouterClient aiChatClient, ILogger<AiGatewayController> logger)
+    private readonly AiChatClientSettings _aiChatClientSettings;
+
+    public AiGatewayController(OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings, ILogger<AiGatewayController> logger,
+        IBackgroundJobClient backgroundJobClient)
     {
         _aiChatClient = aiChatClient;
+        _aiChatClientSettings = aiChatClientSettings;
         _logger = logger;
+        _backgroundJobClient = backgroundJobClient;
+    }
+
+    [HttpPost("summarize-post")]
+    public async Task<IActionResult> SummarizePost([FromBody] AnalyzePostBody contentBody)
+    {
+        string jobId =
+            _backgroundJobClient.Enqueue(() => ProcessAiSummarizeAsync(contentBody.Text));
+        return Ok(new APIResponse() { Data = new JobIdData() { JobId = jobId } });
     }
     
-    [HttpPost("summarize-post")]
-    public async Task<IActionResult> SummarizePost([FromBody] AnalyzePostBody contentBody, [FromServices] AiChatClientSettings aiChatClientSettings)
+    /// <summary>
+    /// Формирует новый пост через ИИ из <paramref name="fullText"/> и отправляет событие по вебсокету
+    /// </summary>
+    /// <param name="fullText"></param>
+    /// <param name="aiChatClientSettings"></param>
+    /// <param name="aiChatClient"></param>
+    public async Task<string> ProcessAiSummarizeAsync(string fullText)
     {
-        List<string> chunks = AiUtilities.SplitTextIntoChunks(contentBody.Text);
-        List<object> summaries = new();
-        
+        List<string> summaries = await SummarizeNewsPostAsync(fullText);
+
+        if (summaries.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        string finallyText = string.Join("\n", summaries);
+
+        return finallyText;
+    }
+
+    private async Task<List<string>> SummarizeNewsPostAsync(string fullText
+    )
+    {
+        List<string> chunks = AiUtilities.SplitTextIntoChunks(fullText);
+        List<string> summaries = new();
+
         _logger.LogInformation($"Обработка {chunks.Count} чанков");
 
         foreach (var chunk in chunks)
@@ -38,34 +76,57 @@ public class AiGatewayController : ControllerBase
             {
                 ChatCompletionRequest request = new()
                 {
-                    Model = aiChatClientSettings.Model,
+                    Model = _aiChatClientSettings.Model,
                     Messages = new List<Message>
                     {
-                        Message.FromSystem(aiChatClientSettings.SystemText),
-                        Message.FromUser(aiChatClientSettings.StartUserText + $"\n{chunk}")
+                        Message.FromSystem(_aiChatClientSettings.SystemText),
+                        Message.FromUser(_aiChatClientSettings.StartUserText + $"\n{chunk}")
                     }
                 };
-
                 ChatCompletionResponse response = await _aiChatClient.CreateChatCompletionAsync(request);
 
                 if (response.Choices == null)
                 {
                     _logger.LogError($"Ошибка обращения к ИИ при обработке чанка");
-                    return StatusCode(500, new APIResponse() { Message = "Ошибка при обработке чанка." });
+                    return new List<string>();
                 }
 
                 _logger.LogInformation($"Чанк успешно обработан");
-                summaries.Add(response.Choices[0].Message.Content);
+                summaries.Add(response.Choices[0].Message.Content.ToString());
             }
             catch (Exception e)
             {
                 _logger.LogInformation(e, $"Ошибка обработки чанка");
-                return StatusCode(500, new APIResponse() { Message = "Ошибка при обработке чанка." });
             }
         }
 
-        string finallySummary = string.Join("\n", summaries);
+        return summaries;
+    }
 
-        return Ok(new APIResponse() { Data = finallySummary});
+    [HttpGet("summarize-post/job")]
+    public async Task<IActionResult> GetTask(string jobId)
+    {
+        var jobMonitoringApi = JobStorage.Current.GetMonitoringApi();
+        var jobDetails = jobMonitoringApi.JobDetails(jobId);
+    
+        if (jobDetails == null) return NotFound(new APIResponse() {Message = "Некорректный jobId"});
+    
+        var latestState = jobDetails.History.LastOrDefault();
+        if (latestState == null) 
+            return Ok(new JobResultStatus() {Status = "Enqueued"});
+    
+        string state = latestState.StateName;
+    
+        if (state == "Succeeded" && latestState.Data.ContainsKey("Result"))
+        {
+            string result = latestState.Data["Result"];
+            result = JsonConvert.DeserializeObject<string>(result)!;
+
+            _backgroundJobClient.Delete(jobId);
+            
+            return Ok(new JobResultStatus() {Status = state, Result = result});
+        }
+    
+        return Ok(new JobResultStatus() {Status = state, Result = null});
     }
 }
