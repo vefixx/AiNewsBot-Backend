@@ -2,6 +2,7 @@
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using AiNewsBot_Backend.API.Models;
+using AiNewsBot_Backend.API.Services;
 using AiNewsBot_Backend.Core.Data.Contexts;
 using AiNewsBot_Backend.Core.Data.Entities;
 using AiNewsBot_Backend.Core.Helpers;
@@ -29,7 +30,8 @@ public class AiGatewayController : ControllerBase
     private readonly ILogger<AiGatewayController> _logger;
     private readonly AiChatClientSettings _aiChatClientSettings;
 
-    public AiGatewayController(PostsContext dbContext, OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings, ILogger<AiGatewayController> logger,
+    public AiGatewayController(PostsContext dbContext, OpenRouterClient aiChatClient,
+        AiChatClientSettings aiChatClientSettings, ILogger<AiGatewayController> logger,
         IBackgroundJobClient backgroundJobClient)
     {
         _dbContext = dbContext;
@@ -43,10 +45,11 @@ public class AiGatewayController : ControllerBase
     public async Task<IActionResult> SummarizePost([FromBody] AnalyzePostBody contentBody)
     {
         string jobId =
-            _backgroundJobClient.Enqueue(() => ProcessAiSummarizeAsync(contentBody.Text, contentBody.PostId));
+            _backgroundJobClient.Enqueue<AiService>(service => service.ProcessAiSummarizeAsync(contentBody.Text,
+                contentBody.PostId, _dbContext, _aiChatClient, _aiChatClientSettings));
         return Ok(new APIResponse() { Data = new JobIdData() { JobId = jobId } });
     }
-    
+
     /// <summary>
     /// Формирует новый пост через ИИ из <paramref name="fullText"/>
     /// </summary>
@@ -63,10 +66,10 @@ public class AiGatewayController : ControllerBase
         }
 
         string finallyText = string.Join("\n", summaries);
-        
-        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postId, SourceText = fullText});
+
+        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postId, SourceText = fullText });
         await _dbContext.SaveChangesAsync();
-        
+
         return finallyText;
     }
 
@@ -123,22 +126,22 @@ public class AiGatewayController : ControllerBase
     {
         var jobMonitoringApi = JobStorage.Current.GetMonitoringApi();
         var jobDetails = jobMonitoringApi.JobDetails(jobId);
-    
-        if (jobDetails == null) return NotFound(new APIResponse() {Message = "Задача с таким jobId не найдена"});
-    
+
+        if (jobDetails == null) return NotFound(new APIResponse() { Message = "Задача с таким jobId не найдена" });
+
         var latestState = jobDetails.History.LastOrDefault();
-        if (latestState == null) 
-            return Ok(new JobResultStatus() {Status = "Enqueued"});
-    
+        if (latestState == null)
+            return Ok(new JobResultStatus() { Status = "Enqueued" });
+
         string state = latestState.StateName;
-    
+
         if (state == "Succeeded" && latestState.Data.ContainsKey("Result"))
         {
             string result = latestState.Data["Result"];
             result = JsonConvert.DeserializeObject<string>(result)!;
-            return Ok(new JobResultStatus() {Status = state, Result = result});
+            return Ok(new JobResultStatus() { Status = state, Result = result });
         }
-    
-        return Ok(new JobResultStatus() {Status = state, Result = null});
+
+        return Ok(new JobResultStatus() { Status = state, Result = null });
     }
 }
