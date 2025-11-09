@@ -2,7 +2,7 @@
 
 public static class AiUtilities
 {
-    public static List<string> SplitTextIntoChunks(string text, int chunkSize = 1000)
+    public static List<string> SplitTextIntoChunks(string text, int chunkSize = 2000)
     {
         var chunks = new List<string>();
     
