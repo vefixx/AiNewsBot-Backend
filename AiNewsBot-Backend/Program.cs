@@ -1,6 +1,8 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using AiNewsBot_Backend.API.Models;
+using AiNewsBot_Backend.Core.Data.Contexts;
+using AiNewsBot_Backend.Core.Data.Entities;
 using AiNewsBot_Backend.Core.Helpers;
 using AiNewsBot_Backend.Core.Models;
 using Hangfire;
@@ -9,6 +11,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
+using Microsoft.EntityFrameworkCore;
 using OpenAI;
 using OpenAI.Chat;
 using OpenRouter.NET;
@@ -34,6 +37,11 @@ public class Program
         builder.Services.AddHangfire(config =>
         {
             config.UseMemoryStorage();
+        });
+
+        builder.Services.AddDbContext<PostsContext>(options =>
+        {
+            options.UseSqlite($"Data Source=Core/Database/app.db");
         });
 
         builder.Services.AddMvc()

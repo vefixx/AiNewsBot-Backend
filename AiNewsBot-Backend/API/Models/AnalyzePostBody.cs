@@ -5,5 +5,6 @@ namespace AiNewsBot_Backend.API.Models;
 
 public class AnalyzePostBody
 {
+    [Required] public required string PostId { get; set; }
     [Required] public required string Text { get; set; }
 }

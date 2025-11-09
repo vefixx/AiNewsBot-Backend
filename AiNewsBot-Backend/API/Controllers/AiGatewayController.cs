@@ -2,6 +2,8 @@
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using AiNewsBot_Backend.API.Models;
+using AiNewsBot_Backend.Core.Data.Contexts;
+using AiNewsBot_Backend.Core.Data.Entities;
 using AiNewsBot_Backend.Core.Helpers;
 using AiNewsBot_Backend.Core.Models;
 using Hangfire;
@@ -9,6 +11,7 @@ using Hangfire.Storage;
 using Hangfire.Storage.Monitoring;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using OpenAI.Chat;
 using OpenRouter.NET;
@@ -20,14 +23,16 @@ namespace AiNewsBot_Backend.API.Controllers;
 [Route("ai-gateway")]
 public class AiGatewayController : ControllerBase
 {
+    private readonly PostsContext _dbContext;
     private readonly OpenRouterClient _aiChatClient;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly ILogger<AiGatewayController> _logger;
     private readonly AiChatClientSettings _aiChatClientSettings;
 
-    public AiGatewayController(OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings, ILogger<AiGatewayController> logger,
+    public AiGatewayController(PostsContext dbContext, OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings, ILogger<AiGatewayController> logger,
         IBackgroundJobClient backgroundJobClient)
     {
+        _dbContext = dbContext;
         _aiChatClient = aiChatClient;
         _aiChatClientSettings = aiChatClientSettings;
         _logger = logger;
@@ -38,17 +43,17 @@ public class AiGatewayController : ControllerBase
     public async Task<IActionResult> SummarizePost([FromBody] AnalyzePostBody contentBody)
     {
         string jobId =
-            _backgroundJobClient.Enqueue(() => ProcessAiSummarizeAsync(contentBody.Text));
+            _backgroundJobClient.Enqueue(() => ProcessAiSummarizeAsync(contentBody.Text, contentBody.PostId));
         return Ok(new APIResponse() { Data = new JobIdData() { JobId = jobId } });
     }
     
     /// <summary>
-    /// Формирует новый пост через ИИ из <paramref name="fullText"/> и отправляет событие по вебсокету
+    /// Формирует новый пост через ИИ из <paramref name="fullText"/>
     /// </summary>
     /// <param name="fullText"></param>
     /// <param name="aiChatClientSettings"></param>
     /// <param name="aiChatClient"></param>
-    public async Task<string> ProcessAiSummarizeAsync(string fullText)
+    public async Task<string> ProcessAiSummarizeAsync(string fullText, string postId)
     {
         List<string> summaries = await SummarizeNewsPostAsync(fullText);
 
@@ -58,7 +63,10 @@ public class AiGatewayController : ControllerBase
         }
 
         string finallyText = string.Join("\n", summaries);
-
+        
+        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postId, SourceText = fullText});
+        await _dbContext.SaveChangesAsync();
+        
         return finallyText;
     }
 
@@ -103,13 +111,20 @@ public class AiGatewayController : ControllerBase
         return summaries;
     }
 
+    [HttpGet("posts")]
+    public async Task<IActionResult> GetPosts()
+    {
+        var posts = await _dbContext.Posts.ToListAsync();
+        return Ok(new APIResponse() { Data = posts });
+    }
+
     [HttpGet("summarize-post/job")]
-    public async Task<IActionResult> GetTask(string jobId)
+    public async Task<IActionResult> GetTaskResult(string jobId)
     {
         var jobMonitoringApi = JobStorage.Current.GetMonitoringApi();
         var jobDetails = jobMonitoringApi.JobDetails(jobId);
     
-        if (jobDetails == null) return NotFound(new APIResponse() {Message = "Некорректный jobId"});
+        if (jobDetails == null) return NotFound(new APIResponse() {Message = "Задача с таким jobId не найдена"});
     
         var latestState = jobDetails.History.LastOrDefault();
         if (latestState == null) 
@@ -121,9 +136,6 @@ public class AiGatewayController : ControllerBase
         {
             string result = latestState.Data["Result"];
             result = JsonConvert.DeserializeObject<string>(result)!;
-
-            _backgroundJobClient.Delete(jobId);
-            
             return Ok(new JobResultStatus() {Status = state, Result = result});
         }
     
