@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace AiNewsBot_Backend.API.Models;
 
-public class AnalyzePostBody
+public class PostCreateInfo
 {
     [Required] public required string PostId { get; set; }
     [Required] public required string Text { get; set; }

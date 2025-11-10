@@ -42,82 +42,24 @@ public class AiGatewayController : ControllerBase
     }
 
     [HttpPost("summarize-post")]
-    public async Task<IActionResult> SummarizePost([FromBody] AnalyzePostBody contentBody)
+    public async Task<IActionResult> SummarizePost([FromBody] PostCreateInfo postCreateInfo)
     {
         string jobId =
-            _backgroundJobClient.Enqueue<AiService>(service => service.ProcessAiSummarizeAsync(contentBody.Text,
-                contentBody.PostId, _dbContext, _aiChatClient, _aiChatClientSettings));
+            _backgroundJobClient.Enqueue<AiService>(service => service.ProcessAiSummarizeAsync(postCreateInfo));
         return Ok(new APIResponse() { Data = new JobIdData() { JobId = jobId } });
-    }
-
-    /// <summary>
-    /// Формирует новый пост через ИИ из <paramref name="fullText"/>
-    /// </summary>
-    /// <param name="fullText"></param>
-    /// <param name="aiChatClientSettings"></param>
-    /// <param name="aiChatClient"></param>
-    public async Task<string> ProcessAiSummarizeAsync(string fullText, string postId)
-    {
-        List<string> summaries = await SummarizeNewsPostAsync(fullText);
-
-        if (summaries.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        string finallyText = string.Join("\n", summaries);
-
-        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postId, SourceText = fullText });
-        await _dbContext.SaveChangesAsync();
-
-        return finallyText;
-    }
-
-    private async Task<List<string>> SummarizeNewsPostAsync(string fullText
-    )
-    {
-        List<string> chunks = AiUtilities.SplitTextIntoChunks(fullText);
-        List<string> summaries = new();
-
-        _logger.LogInformation($"Обработка {chunks.Count} чанков");
-
-        foreach (var chunk in chunks)
-        {
-            try
-            {
-                ChatCompletionRequest request = new()
-                {
-                    Model = _aiChatClientSettings.Model,
-                    Messages = new List<Message>
-                    {
-                        Message.FromSystem(_aiChatClientSettings.SystemText),
-                        Message.FromUser(_aiChatClientSettings.StartUserText + $"\n{chunk}")
-                    }
-                };
-                ChatCompletionResponse response = await _aiChatClient.CreateChatCompletionAsync(request);
-
-                if (response.Choices == null)
-                {
-                    _logger.LogError($"Ошибка обращения к ИИ при обработке чанка");
-                    return new List<string>();
-                }
-
-                _logger.LogInformation($"Чанк успешно обработан");
-                summaries.Add(response.Choices[0].Message.Content.ToString());
-            }
-            catch (Exception e)
-            {
-                _logger.LogInformation(e, $"Ошибка обработки чанка");
-            }
-        }
-
-        return summaries;
     }
 
     [HttpGet("posts")]
     public async Task<IActionResult> GetPosts()
     {
         var posts = await _dbContext.Posts.ToListAsync();
+        return Ok(new APIResponse() { Data = posts });
+    }
+
+    [HttpGet("posts/ids")]
+    public async Task<IActionResult> GetPostIds()
+    {
+        var posts = await _dbContext.Posts.Select(p => p.PostId).ToListAsync();
         return Ok(new APIResponse() { Data = posts });
     }
 

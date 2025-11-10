@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using AiNewsBot_Backend.API.Models;
+using AiNewsBot_Backend.API.Services;
 using AiNewsBot_Backend.Core.Data.Contexts;
 using AiNewsBot_Backend.Core.Data.Entities;
 using AiNewsBot_Backend.Core.Helpers;
@@ -66,6 +67,7 @@ public class Program
         builder.Services.AddSingleton(botClient);
         builder.Services.AddSingleton(openAiChatClient);
         builder.Services.AddSingleton(aiChatClientSettings);
+        builder.Services.AddScoped<AiService>();
         builder.Services.AddControllers();
 
         var app = builder.Build();

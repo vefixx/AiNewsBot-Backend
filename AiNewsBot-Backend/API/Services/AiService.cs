@@ -1,3 +1,4 @@
+using AiNewsBot_Backend.API.Models;
 using AiNewsBot_Backend.Core.Data.Contexts;
 using AiNewsBot_Backend.Core.Data.Entities;
 using AiNewsBot_Backend.Core.Helpers;
@@ -10,10 +11,16 @@ namespace AiNewsBot_Backend.API.Services;
 public class AiService
 {
     private readonly ILogger<AiService> _logger;
+    private readonly PostsContext _dbContext;
+    private readonly OpenRouterClient _aiChatClient;
+    private readonly AiChatClientSettings _aiChatClientSettings;
     
-    public AiService(ILogger<AiService> logger)
+    public AiService(ILogger<AiService> logger, PostsContext dbContext, OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings)
     {
+        _dbContext = dbContext;
         _logger = logger;
+        _aiChatClient = aiChatClient;
+        _aiChatClientSettings = aiChatClientSettings;
     }
     
     /// <summary>
@@ -22,10 +29,9 @@ public class AiService
     /// <param name="fullText"></param>
     /// <param name="aiChatClientSettings"></param>
     /// <param name="aiChatClient"></param>
-    public async Task<string> ProcessAiSummarizeAsync(string fullText, string postId,
-        PostsContext dbContext, OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings)
+    public async Task<string> ProcessAiSummarizeAsync(PostCreateInfo postCreateInfo)
     {
-        List<string> summaries = await SummarizeNewsPostAsync(fullText, aiChatClient, aiChatClientSettings);
+        List<string> summaries = await SummarizeNewsPostAsync(postCreateInfo.Text);
 
         if (summaries.Count == 0)
         {
@@ -34,15 +40,13 @@ public class AiService
 
         string finallyText = string.Join("\n", summaries);
         
-        await dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postId, SourceText = fullText});
-        await dbContext.SaveChangesAsync();
+        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postCreateInfo.PostId, SourceText = postCreateInfo.Text});
+        await _dbContext.SaveChangesAsync();
         
         return finallyText;
     }
     
-    private async Task<List<string>> SummarizeNewsPostAsync(string fullText,
-        OpenRouterClient aiChatClient, AiChatClientSettings aiChatClientSettings
-    )
+    private async Task<List<string>> SummarizeNewsPostAsync(string fullText)
     {
         List<string> chunks = AiUtilities.SplitTextIntoChunks(fullText);
         List<string> summaries = new();
@@ -55,14 +59,14 @@ public class AiService
             {
                 ChatCompletionRequest request = new()
                 {
-                    Model = aiChatClientSettings.Model,
+                    Model = _aiChatClientSettings.Model,
                     Messages = new List<Message>
                     {
-                        Message.FromSystem(aiChatClientSettings.SystemText),
-                        Message.FromUser(aiChatClientSettings.StartUserText + $"\n{chunk}")
+                        Message.FromSystem(_aiChatClientSettings.SystemText),
+                        Message.FromUser(_aiChatClientSettings.StartUserText + $"\n{chunk}")
                     }
                 };
-                ChatCompletionResponse response = await aiChatClient.CreateChatCompletionAsync(request);
+                ChatCompletionResponse response = await _aiChatClient.CreateChatCompletionAsync(request);
 
                 if (response.Choices == null)
                 {
