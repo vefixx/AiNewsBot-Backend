@@ -1,5 +1,7 @@
 ﻿using AiNewsBot_Backend.Core.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AiNewsBot_Backend.Core.Data.Contexts;
 
@@ -9,5 +11,6 @@ public class PostsContext : DbContext
     
     public PostsContext(DbContextOptions<PostsContext> options) : base(options)
     {
+        Database.Migrate();
     }
 }
