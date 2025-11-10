@@ -73,7 +73,7 @@ public class AiGatewayController : ControllerBase
 
         var latestState = jobDetails.History.LastOrDefault();
         if (latestState == null)
-            return Ok(new JobResultStatus() { Status = "Enqueued" });
+            return Ok(new APIResponse() { Data = new JobResultStatus() { Status = "Enqueued" } });
 
         string state = latestState.StateName;
 
@@ -81,9 +81,9 @@ public class AiGatewayController : ControllerBase
         {
             string result = latestState.Data["Result"];
             result = JsonConvert.DeserializeObject<string>(result)!;
-            return Ok(new JobResultStatus() { Status = state, Result = result });
+            return Ok(new APIResponse() { Data = new JobResultStatus() { Status = state, Result = result } });
         }
 
-        return Ok(new JobResultStatus() { Status = state, Result = null });
+        return Ok(new APIResponse() { Data = new JobResultStatus() { Status = state, Result = null } });
     }
 }

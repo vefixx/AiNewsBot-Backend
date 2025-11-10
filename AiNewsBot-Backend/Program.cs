@@ -59,6 +59,8 @@ public class Program
             options.ModelMetadataDetailsProviders.Add(new SystemTextJsonValidationMetadataProvider());
         });
 
+        builder.WebHost.UseUrls("http://localhost:3232");
+
         TelegramBotClient botClient = new TelegramBotClient(DotNetEnv.Env.GetString("TELEGRAM_BOT_TOKEN"));
         OpenRouterClient openAiChatClient = new(DotNetEnv.Env.GetString("AI_KEY"));
         AiChatClientSettings aiChatClientSettings =
