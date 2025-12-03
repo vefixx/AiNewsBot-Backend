@@ -1,0 +1,16 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiNewsBot-Backend", "AiNewsBot-Backend.csproj", "{F809A074-4A40-4330-884C-CDA8DC953D01}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F809A074-4A40-4330-884C-CDA8DC953D01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F809A074-4A40-4330-884C-CDA8DC953D01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F809A074-4A40-4330-884C-CDA8DC953D01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F809A074-4A40-4330-884C-CDA8DC953D01}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
