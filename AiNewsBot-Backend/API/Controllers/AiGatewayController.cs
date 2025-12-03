@@ -42,11 +42,11 @@ public class AiGatewayController : ControllerBase
     }
 
     [HttpPost("summarize-post")]
-    public async Task<IActionResult> SummarizePost([FromBody] PostCreateInfo postCreateInfo)
+    public async Task<IActionResult> SummarizePost([FromBody] PostCreateInfoDTO postCreateInfoDto)
     {
         string jobId =
-            _backgroundJobClient.Enqueue<AiService>(service => service.ProcessAiSummarizeAsync(postCreateInfo));
-        return Ok(new APIResponse() { Data = new JobIdData() { JobId = jobId } });
+            _backgroundJobClient.Enqueue<AiService>(service => service.ProcessAiSummarizeAsync(postCreateInfoDto));
+        return Ok(new APIResponse() { Data = new JobIdDataDTO() { JobId = jobId } });
     }
 
     [HttpGet("posts")]
@@ -73,7 +73,7 @@ public class AiGatewayController : ControllerBase
 
         var latestState = jobDetails.History.LastOrDefault();
         if (latestState == null)
-            return Ok(new APIResponse() { Data = new JobResultStatus() { Status = "Enqueued" } });
+            return Ok(new APIResponse() { Data = new JobResultStatusDTO() { Status = "Enqueued" } });
 
         string state = latestState.StateName;
 
@@ -81,9 +81,9 @@ public class AiGatewayController : ControllerBase
         {
             string result = latestState.Data["Result"];
             result = JsonConvert.DeserializeObject<string>(result)!;
-            return Ok(new APIResponse() { Data = new JobResultStatus() { Status = state, Result = result } });
+            return Ok(new APIResponse() { Data = new JobResultStatusDTO() { Status = state, Result = result } });
         }
 
-        return Ok(new APIResponse() { Data = new JobResultStatus() { Status = state, Result = null } });
+        return Ok(new APIResponse() { Data = new JobResultStatusDTO() { Status = state, Result = null } });
     }
 }

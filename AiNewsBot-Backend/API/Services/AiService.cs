@@ -29,9 +29,9 @@ public class AiService
     /// <param name="fullText"></param>
     /// <param name="aiChatClientSettings"></param>
     /// <param name="aiChatClient"></param>
-    public async Task<string> ProcessAiSummarizeAsync(PostCreateInfo postCreateInfo)
+    public async Task<string> ProcessAiSummarizeAsync(PostCreateInfoDTO postCreateInfoDto)
     {
-        List<string> summaries = await SummarizeNewsPostAsync(postCreateInfo.Text);
+        List<string> summaries = await SummarizeNewsPostAsync(postCreateInfoDto.Text);
 
         if (summaries.Count == 0)
         {
@@ -40,7 +40,7 @@ public class AiService
 
         string finallyText = string.Join("\n", summaries);
         
-        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postCreateInfo.PostId, SourceText = postCreateInfo.Text});
+        await _dbContext.Posts.AddAsync(new Post() { AiText = finallyText, PostId = postCreateInfoDto.PostId, SourceText = postCreateInfoDto.Text});
         await _dbContext.SaveChangesAsync();
         
         return finallyText;
